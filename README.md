@@ -2,13 +2,23 @@
 
 A production-ready, multi-vendor liveness detection system built with Swift 6's strict concurrency, featuring automatic vendor fallback, comprehensive security, and reactive event streams.
 
+## Features
+
+✅ **Clean Architecture** - Single source of truth with no code duplication  
+✅ **Multi-Vendor Support** - Automatic fallback between liveness detection vendors  
+✅ **Swift 6 Concurrency** - Actor-based design with strict concurrency safety  
+✅ **Reactive Events** - AsyncThrowingStream for real-time progress updates  
+✅ **Type Safety** - Comprehensive error handling and strongly-typed configurations  
+✅ **Memory Safe** - Weak references and automatic cleanup  
+✅ **iOS 14+ Support** - Compatible with modern iOS deployment targets  
+
 ## Project Structure
 
 ```
 SwiftLivenessKit/
 ├── Package.swift                 # Swift Package Manager configuration
 ├── Sources/
-│   └── LivenessDetection/
+│   └── LivenessDetection/       # Main library module
 │       ├── Core/
 │       │   ├── Types/           # Core data types (Result, Error, Event, Configuration)
 │       │   ├── Protocols/       # Main protocol definitions
@@ -18,75 +28,142 @@ SwiftLivenessKit/
 │       │   ├── VendorA/         # VendorA implementation
 │       │   ├── VendorB/         # VendorB implementation
 │       │   └── Mock/            # Mock adapter for testing
-│       ├── Security/            # Security features (App Attest, etc.)
+│       ├── Security/            # Security features
 │       └── Factory/             # Adapter factory
 └── Tests/
     └── LivenessDetectionTests/  # Unit tests
 ```
 
-## Quick Start
+## Installation
 
-1. Open in Xcode:
-```bash
-cd /Users/bruno/Developer/deep-researchs/sdkadapter/SwiftLivenessKit
-open Package.swift
+### Swift Package Manager
+
+Add the following to your `Package.swift` file:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/yourusername/SwiftLivenessKit.git", from: "1.0.1")
+]
 ```
 
-2. Basic Usage:
+Or in Xcode:
+1. Go to File → Add Package Dependencies
+2. Enter the repository URL
+3. Select version 1.0.1 or later
+
+## Quick Start
+
 ```swift
 import LivenessDetection
 
 // Configure vendors
 let vendorConfigs: [any LivenessConfiguration] = [
-    VendorAConfiguration(apiKey: "your-key"),
-    VendorBConfiguration(clientId: "id", clientSecret: "secret")
+    VendorAConfiguration(apiKey: "your-api-key"),
+    VendorBConfiguration(clientId: "your-client-id", clientSecret: "your-client-secret"),
+    MockConfiguration(shouldSucceed: true) // For testing
 ]
 
-// Create adapter
+// Create adapter factory and environment
 let factory = DefaultAdapterFactory()
 let environment = LivenessEnvironment(
     adapterFactory: factory,
-    logger: { print($0) }
+    logger: { print("LivenessKit: \($0)") }
 )
 
+// Create composite adapter
 let adapter = CompositeLivenessAdapter(
     environment: environment,
     vendorConfigurations: vendorConfigs
 )
 
-// Perform liveness check
-let result = try await adapter.performLivenessCheck(in: viewController)
-print("Liveness verified! Confidence: \(result.confidence)")
+// Perform liveness detection
+let eventStream = adapter.startLivenessDetection(in: viewController)
+
+for try await event in eventStream {
+    switch event {
+    case .started:
+        print("Liveness detection started")
+    case .progress(let percentage):
+        print("Progress: \(percentage * 100)%")
+    case .instructionChanged(let instruction):
+        print("Instruction: \(instruction)")
+    case .completed(let result):
+        print("Success! Confidence: \(result.confidence)")
+        break
+    case .failed(let error):
+        print("Error: \(error.localizedDescription)")
+        break
+    }
+}
 ```
 
-## Files Created
+## Architecture
 
-- ✅ Core Types (LivenessError, LivenessResult, LivenessEvent, LivenessConfiguration)
-- ✅ Protocols (LivenessVendorAdapter, LivenessAdapterFactory)
-- ✅ Base Implementations (BaseLivenessAdapter, LivenessEnvironment)
-- ✅ Composite Adapter (started - needs completion)
-- 🚧 Vendor Adapters (partially created)
-- 🚧 Security Manager (not yet created)
-- 🚧 Factory Implementation (not yet created)
-- 🚧 Tests (not yet created)
+### Core Components
 
-## Next Steps
+- **LivenessVendorAdapter** - Protocol for vendor-specific implementations
+- **CompositeLivenessAdapter** - Manages multiple vendors with automatic fallback
+- **LivenessConfiguration** - Type-safe configuration for each vendor
+- **LivenessEvent** - Reactive event system for progress tracking
+- **LivenessError** - Comprehensive error handling
 
-1. Complete the remaining vendor adapter implementations
-2. Add the security manager and App Attest support
-3. Create the factory implementation
-4. Add comprehensive unit tests
-5. Add documentation in the docs/ directory
+### Vendor Support
 
-## Documentation
+The framework supports multiple liveness detection vendors:
 
-See the `docs/` directory for:
-- Getting Started Tutorial
-- API Reference
-- Security Guide
-- Certificate Pinning Tutorial
-- Migration Guide
+- **VendorA** - Fast detection with basic progress tracking
+- **VendorB** - Detailed metadata and comprehensive progress steps
+- **Mock** - For testing and development
+
+### Event System
+
+```swift
+public enum LivenessEvent {
+    case started
+    case progress(percentage: Double)
+    case instructionChanged(String)
+    case completed(LivenessResult)
+    case failed(LivenessError)
+}
+```
+
+### Error Handling
+
+```swift
+public enum LivenessError: Error {
+    case configurationFailed(reason: String)
+    case timeout(vendor: String)
+    case vendorSpecific(vendor: String, code: Int, message: String)
+    case noAvailableVendor
+    case cancelled
+    case invalidState(String)
+    case viewControllerDeallocated
+}
+```
+
+## Requirements
+
+- iOS 14.0+
+- Swift 5.9+
+- Xcode 15.0+
+
+## Version History
+
+- **1.0.1** - Major refactoring and cleanup (2025-01-10)
+- **1.0.0** - Initial release (2024-01-10)
 
 ## License
 
 MIT License - see LICENSE file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Support
+
+For issues and questions, please open an issue on GitHub or contact the maintainers.

@@ -1,14 +1,5 @@
 import Foundation
 
-public enum SendableSettingsValue: Sendable, Equatable, Hashable {
-    case string(String)
-    case int(Int)
-    case double(Double)
-    case bool(Bool)
-    case array([SendableSettingsValue])
-    case dictionary([String: SendableSettingsValue])
-}
-
 public struct VendorAConfiguration: LivenessConfiguration {
     public let vendorName = "VendorA"
     public let timeout: TimeInterval

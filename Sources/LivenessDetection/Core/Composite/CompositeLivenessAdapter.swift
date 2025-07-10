@@ -6,13 +6,13 @@ import UIKit
 /// Manages multiple vendor adapters with automatic fallback
 public actor CompositeLivenessAdapter {
     private let environment: LivenessEnvironment
-    private var vendorQueue: [SendableSettingsValue: LivenessConfiguration]
+    private var vendorQueue: [any LivenessConfiguration]
     private var currentAdapterIndex: Int = 0
     private weak var hostingViewController: UIViewController?
     
     public init(
         environment: LivenessEnvironment,
-        vendorConfigurations: [SendableSettingsValue: LivenessConfiguration]
+        vendorConfigurations: [any LivenessConfiguration]
     ) {
         self.environment = environment
         self.vendorQueue = vendorConfigurations
@@ -34,14 +34,14 @@ public actor CompositeLivenessAdapter {
             }
         }
     }
+    
     private func processVendorQueue(
         continuation: AsyncThrowingStream<LivenessEvent, Error>.Continuation
     ) async {
         currentAdapterIndex = 0
-        let vendorConfigurations = Array(vendorQueue.values)
         
-        while currentAdapterIndex < vendorConfigurations.count {
-            let configuration = vendorConfigurations[currentAdapterIndex]
+        while currentAdapterIndex < vendorQueue.count {
+            let configuration = vendorQueue[currentAdapterIndex]
             
             log("Attempting vendor: \(configuration.vendorName)")
             
@@ -63,7 +63,7 @@ public actor CompositeLivenessAdapter {
                 continue
             }
             
-            log("Successfully configure \(configuration.vendorName)")
+            log("Successfully configured \(configuration.vendorName)")
             
             // Check if view controller is still valid
             guard let _ = hostingViewController else {
@@ -73,7 +73,6 @@ public actor CompositeLivenessAdapter {
             
             // If we reach here, presumably more code would continue the process,
             // but since not provided, we just break out of the loop
-            
             break
         }
     }

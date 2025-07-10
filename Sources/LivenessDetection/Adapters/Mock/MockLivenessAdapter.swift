@@ -2,14 +2,16 @@ import UIKit
 
 // MARK: - Mock Adapter for Testing
 
-public actor MockLivenessAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
-    public typealias Configuration = MockConfiguration
-    
+public actor MockLivenessAdapter: LivenessVendorAdapter {
+    private var _isConfigured: Bool = false
+    private var currentTask: Task<Void, Never>?
     private var configuration: MockConfiguration?
+    
+    public typealias Configuration = MockConfiguration
     
     public func configure(with configuration: MockConfiguration) async throws {
         self.configuration = configuration
-        await setConfigured(true)
+        setConfigured(true)
     }
     
     public func startLivenessCheck(
@@ -29,7 +31,7 @@ public actor MockLivenessAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
                     let result = LivenessResult(
                         vendor: "Mock",
                         confidence: 1.0,
-                        metadata: ["test": true]
+                        metadata: ["test": .bool(true)]
                     )
                     continuation.yield(.completed(result))
                 } else {
@@ -50,12 +52,33 @@ public actor MockLivenessAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
     }
     
     public func reset() async {
-        await cancelCurrentTask()
+        cancelCurrentTask()
     }
     
     public func deallocate() async {
         await reset()
         configuration = nil
-        await setConfigured(false)
+        setConfigured(false)
+    }
+}
+
+extension MockLivenessAdapter {
+    
+    public var isConfigured: Bool {
+        _isConfigured
+    }
+    
+    public func setConfigured(_ value: Bool) {
+        _isConfigured = value
+    }
+    
+    public func cancelCurrentTask() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
+    
+    public func setCurrentTask(_ task: Task<Void, Never>) {
+        cancelCurrentTask()
+        currentTask = task
     }
 }

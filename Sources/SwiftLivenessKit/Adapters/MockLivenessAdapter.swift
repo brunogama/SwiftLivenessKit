@@ -2,7 +2,7 @@ import UIKit
 
 // MARK: - Mock Adapter for Testing
 
-public actor MockLivenessAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
+public actor MockLivenessAdapter: LivenessVendorAdapter { 
     public struct MockConfiguration: LivenessConfiguration {
         public let vendorName = "Mock"
         public let timeout: TimeInterval
@@ -25,10 +25,30 @@ public actor MockLivenessAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
     public typealias Configuration = MockConfiguration
     
     private var configuration: MockConfiguration?
+    private var currentTask: Task<Void, Never>?
+    private var _isConfigured: Bool = false
+
+    public var isConfigured: Bool {
+        _isConfigured
+    }
+
+    private func setConfigured(_ value: Bool) {
+        _isConfigured = value
+    }
+
+    private func cancelCurrentTask() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
+
+    private func setCurrentTask(_ task: Task<Void, Never>) {
+        cancelCurrentTask()
+        currentTask = task
+    }
     
     public func configure(with configuration: MockConfiguration) async throws {
         self.configuration = configuration
-        await setConfigured(true)
+        setConfigured(true)
     }
     
     public func startLivenessCheck(
@@ -69,12 +89,12 @@ public actor MockLivenessAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
     }
     
     public func reset() async {
-        await cancelCurrentTask()
+        cancelCurrentTask()
     }
     
     public func deallocate() async {
         await reset()
         configuration = nil
-        await setConfigured(false)
+        setConfigured(false)
     }
 }

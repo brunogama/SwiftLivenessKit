@@ -6,7 +6,7 @@ import UIKit
 public protocol LivenessConfiguration: Sendable {
     var vendorName: String { get }
     var timeout: TimeInterval { get }
-    var additionalSettings: [String: Any] { get }
+    var additionalSettings: [String: SendableSettingsValue] { get }
 }
 
 /// Main protocol that all vendor adapters must implement
@@ -30,3 +30,4 @@ public protocol LivenessVendorAdapter: Actor {
     /// Current state of the adapter
     var isConfigured: Bool { get }
 }
+

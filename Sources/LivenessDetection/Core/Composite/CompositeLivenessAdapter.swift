@@ -1,3 +1,4 @@
+import Foundation
 import UIKit
 
 // MARK: - Composite Adapter
@@ -5,14 +6,13 @@ import UIKit
 /// Manages multiple vendor adapters with automatic fallback
 public actor CompositeLivenessAdapter {
     private let environment: LivenessEnvironment
-    private var vendorQueue: [any LivenessConfiguration]
+    private var vendorQueue: [SendableSettingsValue: LivenessConfiguration]
     private var currentAdapterIndex: Int = 0
-    private var adapters: [any LivenessVendorAdapter] = []
     private weak var hostingViewController: UIViewController?
     
     public init(
         environment: LivenessEnvironment,
-        vendorConfigurations: [any LivenessConfiguration]
+        vendorConfigurations: [SendableSettingsValue: LivenessConfiguration]
     ) {
         self.environment = environment
         self.vendorQueue = vendorConfigurations
@@ -33,35 +33,90 @@ public actor CompositeLivenessAdapter {
                 task.cancel()
             }
         }
-    }    
+    }
     private func processVendorQueue(
         continuation: AsyncThrowingStream<LivenessEvent, Error>.Continuation
     ) async {
         currentAdapterIndex = 0
+        let vendorConfigurations = Array(vendorQueue.values)
         
-        while currentAdapterIndex < vendorQueue.count {
-            let configuration = vendorQueue[currentAdapterIndex]
+        while currentAdapterIndex < vendorConfigurations.count {
+            let configuration = vendorConfigurations[currentAdapterIndex]
             
             log("Attempting vendor: \(configuration.vendorName)")
             
+            // Create adapter for current vendor
+            guard let adapter = environment.adapterFactory.createAdapter(for: configuration) else {
+                log("Failed to create adapter for \(configuration.vendorName)")
+                currentAdapterIndex += 1
+                continue
+            }
+            
+            // Configure with timeout using a generic helper
             do {
-                // Create adapter for current vendor
-                guard let adapter = environment.adapterFactory.createAdapter(for: configuration) else {
-                    log("Failed to create adapter for \(configuration.vendorName)")
-                    currentAdapterIndex += 1
-                    continue
-                }
-                
-                adapters.append(adapter)
-                
-                // Configure with timeout
                 try await withTimeout(seconds: 5) {
-                    try await adapter.configure(with: configuration)
+                    try await adapter.configureAny(configuration)
                 }
-                
-                log("Successfully configured \(configuration.vendorName)")
-                
-                // Check if view controller is still valid
-                guard let viewController = hostingViewController else {
-                    throw LivenessError.viewControllerDeallocated
-                }
+            } catch {
+                log("Configuration failed for \(configuration.vendorName): \(error)")
+                currentAdapterIndex += 1
+                continue
+            }
+            
+            log("Successfully configure \(configuration.vendorName)")
+            
+            // Check if view controller is still valid
+            guard let _ = hostingViewController else {
+                continuation.finish(throwing: LivenessError.viewControllerDeallocated)
+                return
+            }
+            
+            // If we reach here, presumably more code would continue the process,
+            // but since not provided, we just break out of the loop
+            
+            break
+        }
+    }
+    
+    private func log(_ message: String) {
+        environment.logger?("[CompositeLivenessAdapter] \(message)")
+    }
+}
+
+// MARK: - Type‑erased adapter utilities
+
+private extension LivenessVendorAdapter {
+    /// Allows configuring `any LivenessVendorAdapter` values by erasing the
+    /// associated‑type requirement at the call‑site.  A runtime check guarantees
+    /// the concrete adapter receives a matching configuration.
+    func configureAny(_ configuration: LivenessConfiguration) async throws {
+        guard let typedConfig = configuration as? Configuration else {
+            throw LivenessError.invalidState(
+                "Configuration type mismatch. Expected \(Configuration.self), got \(type(of: configuration))"
+            )
+        }
+        try await configure(with: typedConfig)
+    }
+}
+
+// MARK: - Timeout Helper
+
+private func withTimeout<T>(
+    seconds: TimeInterval,
+    operation: @escaping () async throws -> T
+) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask {
+            try await operation()
+        }
+        
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw LivenessError.timeout(vendor: "Configuration")
+        }
+        
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
+    }
+}

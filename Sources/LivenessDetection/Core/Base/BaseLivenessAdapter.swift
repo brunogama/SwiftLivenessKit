@@ -9,16 +9,16 @@ public actor BaseLivenessAdapter {
         _isConfigured
     }
     
-    func setConfigured(_ value: Bool) {
+    public func setConfigured(_ value: Bool) {
         _isConfigured = value
     }
     
-    func cancelCurrentTask() {
+    public func cancelCurrentTask() {
         currentTask?.cancel()
         currentTask = nil
     }
     
-    func setCurrentTask(_ task: Task<Void, Never>) {
+    public func setCurrentTask(_ task: Task<Void, Never>) {
         cancelCurrentTask()
         currentTask = task
     }

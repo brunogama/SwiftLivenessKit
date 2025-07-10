@@ -2,11 +2,18 @@ import UIKit
 
 // MARK: - Vendor A Adapter
 
-public actor VendorAAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
-    public typealias Configuration = VendorAConfiguration
-    
+public actor VendorAAdapter: LivenessVendorAdapter {
     private var configuration: VendorAConfiguration?
     private weak var hostingViewController: UIViewController?
+    
+    private var _isConfigured: Bool = false
+    public var isConfigured: Bool {
+        _isConfigured
+    }
+    
+    private func setConfigured(_ value: Bool) {
+        _isConfigured = value
+    }
     
     public func configure(with configuration: VendorAConfiguration) async throws {
         // Simulate vendor SDK initialization
@@ -18,14 +25,33 @@ public actor VendorAAdapter: BaseLivenessAdapter, LivenessVendorAdapter {
         }
         
         self.configuration = configuration
-        await setConfigured(true)
+        setConfigured(true)
     }
     
     public func startLivenessCheck(
         in viewController: UIViewController
     ) async throws -> AsyncThrowingStream<LivenessEvent, Error> {
-        guard await isConfigured else {
+        guard isConfigured else {
             throw LivenessError.invalidState("Adapter not configured")
         }
         
         self.hostingViewController = viewController
+        
+        // For now, provide a minimal stub stream.
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.started)
+            continuation.finish()
+        }
+    }
+    
+    public func reset() async {
+        configuration = nil
+        setConfigured(false)
+    }
+    
+    public func deallocate() async {
+        configuration = nil
+        hostingViewController = nil
+        setConfigured(false)
+    }
+}

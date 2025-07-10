@@ -1,9 +1,9 @@
 import Foundation
 
-public struct MockConfiguration: LivenessConfiguration {
+public struct MockConfiguration: LivenessConfiguration, Sendable {
     public let vendorName = "Mock"
     public let timeout: TimeInterval
-    public let additionalSettings: [String: Any]
+    public let additionalSettings: [String: SendableSettingsValue]
     public let shouldSucceed: Bool
     public let simulatedDelay: TimeInterval
     

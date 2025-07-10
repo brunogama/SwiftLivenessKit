@@ -53,13 +53,50 @@ public actor CompositeLivenessAdapter {
                     continue
                 }
                 
-                adapters.append(adapter)
-                
-                // Configure with timeout
-                try await withTimeout(seconds: 5) {
-                    try await adapter.configure(with: configuration)
+                // Create and configure adapter with timeout
+                let configuredAdapter: any LivenessVendorAdapter = try await withTimeout(seconds: 5) {
+                    // Create a new adapter instance to avoid type casting issues
+                    guard let freshAdapter = environment.adapterFactory.createAdapter(for: configuration) else {
+                        throw LivenessError.configurationFailed(reason: "Failed to create adapter for \(configuration.vendorName)")
+                    }
+
+                    // Configure based on vendor type
+                    switch configuration.vendorName {
+                    case "Mock":
+                        if let mockAdapter = freshAdapter as? MockLivenessAdapter,
+                           let mockConfig = configuration as? MockLivenessAdapter.MockConfiguration
+                        {
+                            try await mockAdapter.configure(with: mockConfig)
+                            return mockAdapter
+                        } else {
+                            throw LivenessError.configurationFailed(reason: "Mock adapter configuration failed")
+                        }
+                    case "VendorA":
+                        if let vendorAAdapter = freshAdapter as? VendorAAdapter,
+                           let vendorAConfig = configuration as? VendorAConfiguration
+                        {
+                            try await vendorAAdapter.configure(with: vendorAConfig)
+                            return vendorAAdapter
+                        } else {
+                            throw LivenessError.configurationFailed(reason: "VendorA adapter configuration failed")
+                        }
+                    case "VendorB":
+                        if let vendorBAdapter = freshAdapter as? VendorBAdapter,
+                           let vendorBConfig = configuration as? VendorBConfiguration
+                        {
+                            try await vendorBAdapter.configure(with: vendorBConfig)
+                            return vendorBAdapter
+                        } else {
+                            throw LivenessError.configurationFailed(reason: "VendorB adapter configuration failed")
+                        }
+                    default:
+                        throw LivenessError.configurationFailed(reason: "Unknown vendor: \(configuration.vendorName)")
+                    }
                 }
                 
+                // Add the configured adapter to our array
+                adapters.append(configuredAdapter)
+
                 log("Successfully configured \(configuration.vendorName)")
                 
                 // Check if view controller is still valid
@@ -68,7 +105,7 @@ public actor CompositeLivenessAdapter {
                 }
                 
                 // Start liveness check with vendor timeout
-                let stream = try await adapter.startLivenessCheck(in: viewController)
+                let stream = try await configuredAdapter.startLivenessCheck(in: viewController)
                 
                 // Process events from vendor
                 let success = await processVendorStream(
@@ -107,6 +144,8 @@ public actor CompositeLivenessAdapter {
         continuation.finish(throwing: LivenessError.noAvailableVendor)
     }
     
+    
+
     private func processVendorStream(
         stream: AsyncThrowingStream<LivenessEvent, Error>,
         vendorName: String,
@@ -184,5 +223,27 @@ public actor CompositeLivenessAdapter {
     
     private func log(_ message: String) {
         environment.logger?("[CompositeLivenessAdapter] \(message)")
+    }
+
+    // MARK: - Timeout Helper
+
+    private func withTimeout<T>(
+        seconds: TimeInterval,
+        operation: @escaping () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw LivenessError.timeout(vendor: "Configuration")
+            }
+
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
 }
